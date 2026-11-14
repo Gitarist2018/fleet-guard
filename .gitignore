@@ -1,0 +1,18 @@
+# Never commit host credentials, certificate private keys or environment secrets.
+.env
+.env.*
+!.env.example
+config.json
+**/config.json
+*.key
+*.pem
+*.p12
+*.pfx
+secrets.yaml
+**/secrets.yaml
+*.tar
+*.tar.gz
+*.zip
+__pycache__/
+*.py[cod]
+.DS_Store
