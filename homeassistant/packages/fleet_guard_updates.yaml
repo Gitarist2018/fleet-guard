@@ -1,0 +1,53 @@
+# Fleet Guard notification package for Home Assistant.
+# Requires update entities created by custom_components/fleet_guard.
+# Does NOT enable maintenance actions or trigger updates.
+template:
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: homeassistant
+        event: start
+    sensor:
+      - name: "Fleet Guard Container Updates Offen"
+        unique_id: fleet_guard_container_updates_offen
+        icon: mdi:package-up
+        state: >-
+          {% set ids = integration_entities('fleet_guard') | select('match', '^update\.') | list %}
+          {{ expand(ids) | selectattr('state', 'eq', 'on') | list | count }}
+        attributes:
+          pending_names: >-
+            {% set ids = integration_entities('fleet_guard') | select('match', '^update\.') | list %}
+            {{ expand(ids) | selectattr('state', 'eq', 'on') | map(attribute='name') | list | join(' | ') }}
+          unknown_count: >-
+            {% set ids = integration_entities('fleet_guard') | select('match', '^update\.') | list %}
+            {{ expand(ids) | selectattr('state', 'in', ['unknown', 'unavailable']) | list | count }}
+
+automation:
+  - id: fleet_guard_all_hosts_updates_notification
+    alias: "Fleet Guard: Docker-Updates in Benachrichtigungen"
+    triggers:
+      - trigger: state
+        entity_id: sensor.fleet_guard_container_updates_offen
+      - trigger: homeassistant
+        event: start
+    actions:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ states('sensor.fleet_guard_container_updates_offen') | int(0) > 0 }}"
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  notification_id: fleet_guard_container_updates
+                  title: "Fleet Guard: Docker-Updates verfügbar"
+                  message: >-
+                    {{ states('sensor.fleet_guard_container_updates_offen') }} Container-Updates sind verfügbar.
+
+                    {{ state_attr('sensor.fleet_guard_container_updates_offen', 'pending_names') or 'Details in Fleet Guard prüfen.' }}
+
+                    Öffne die jeweiligen Update-Entitäten und bestätige die Installation einzeln.
+        default:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: fleet_guard_container_updates
+    mode: restart
