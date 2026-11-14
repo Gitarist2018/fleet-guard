@@ -1,0 +1,17 @@
+# Requires custom:auto-entities. Insert in Simon42 dashboard as a custom card.
+# Selecting an update opens the native HA update dialog, if supplied by integration.
+type: custom:auto-entities
+card:
+  type: entities
+  title: Fleet Guard · Docker-Updates
+  show_header_toggle: false
+  state_color: true
+filter:
+  template: >-
+    {% set ids = integration_entities('fleet_guard') | select('match', '^update\.') | list %}
+    {% for id in ids if is_state(id, 'on') %}
+    - entity: {{ id }}
+    {% endfor %}
+show_empty: false
+sort:
+  method: friendly_name
