@@ -34,16 +34,16 @@ automation:
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ states('sensor.fleet_guard_container_updates_offen') | int(0) > 0 }}"
+                value_template: "{{ states('sensor.fleet_guard_container_updates_offen') | int(0) > 0 or state_attr('sensor.fleet_guard_container_updates_offen', 'unknown_count') | int(0) > 0 }}"
             sequence:
               - action: persistent_notification.create
                 data:
                   notification_id: fleet_guard_container_updates
-                  title: "Fleet Guard: Docker-Updates verfügbar"
+                  title: "Fleet Guard: Docker-Updates / ungeklärte Images"
                   message: >-
                     {{ states('sensor.fleet_guard_container_updates_offen') }} Container-Updates sind verfügbar.
 
-                    {{ state_attr('sensor.fleet_guard_container_updates_offen', 'pending_names') or 'Details in Fleet Guard prüfen.' }}
+                    {{ state_attr('sensor.fleet_guard_container_updates_offen', 'pending_names') or 'Details in Fleet Guard prüfen.' }}\n\n                    Ungeprüfte/unverfügbare Image-Entitäten: {{ state_attr('sensor.fleet_guard_container_updates_offen', 'unknown_count') | int(0) }}.
 
                     Öffne die jeweiligen Update-Entitäten und bestätige die Installation einzeln.
         default:
