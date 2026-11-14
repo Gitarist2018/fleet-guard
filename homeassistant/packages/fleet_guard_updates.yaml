@@ -51,3 +51,60 @@ automation:
             data:
               notification_id: fleet_guard_container_updates
     mode: restart
+
+
+# Manual batch installation. No automatic scheduling.
+# Only update.*_image entities owned by Fleet Guard and currently 'on' are accepted.
+# Agents may serialize jobs even if HA dispatches multiple entity targets.
+script:
+  fleet_guard_container_batch_update:
+    alias: "Fleet Guard: ausgewählte Docker-Container aktualisieren"
+    description: >-
+      Mehrere Fleet-Guard-Docker-Images auswählen und mit einer Bestätigung
+      aktualisieren. Die Aktualisierung ist nicht automatisch.
+    icon: mdi:package-up
+    mode: single
+    fields:
+      docker_images:
+        name: "Docker-Container"
+        description: "Wähle nur die Container, die du jetzt aktualisieren möchtest."
+        required: true
+        selector:
+          entity:
+            multiple: true
+            filter:
+              - integration: fleet_guard
+                domain: update
+      bestaetigen:
+        name: "Updates jetzt installieren"
+        description: >-
+          Einmalig bestätigen. Die ausgewählten Container können beim
+          Image-Wechsel neu erstellt werden; kurze Ausfälle sind möglich.
+        required: true
+        default: false
+        selector:
+          boolean: {}
+    sequence:
+      - variables:
+          requested: "{{ docker_images | default([], true) }}"
+          allowed: >-
+            {{ integration_entities('fleet_guard')
+               | select('match', '^update\..*_image$')
+               | select('is_state', 'on')
+               | list }}
+      - if:
+          - condition: template
+            value_template: >-
+              {{ bestaetigen | default(false) | bool
+                 and requested | length > 0
+                 and requested | unique | list | length == requested | length
+                 and requested | select('in', allowed) | list | length == requested | length }}
+        then:
+          - action: update.install
+            target:
+              entity_id: "{{ requested }}"
+        else:
+          - stop: >-
+              Keine gültige bestätigte Auswahl: Nur Fleet-Guard-Docker-Updates
+              im Zustand 'on' sind erlaubt. Bitte Auswahl prüfen.
+            error: true
