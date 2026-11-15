@@ -1,0 +1,12 @@
+{
+  "domain": "fleet_guard",
+  "name": "Fleet Guard",
+  "version": "0.3.0",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "config_flow": true,
+  "requirements": [],
+  "codeowners": [],
+  "documentation": "https://github.com/Gitarist2018/fleet-guard/blob/main/docs/DEPLOYMENT.md",
+  "issue_tracker": "https://github.com/Gitarist2018/fleet-guard/issues"
+}
