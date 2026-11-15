@@ -31,12 +31,14 @@ Die Ausgabe unterscheidet:
 
 ## Freigegebene Compose-Projekte übernehmen
 
-Wenn die gemeldeten `AUTO-READY`-Projekte plausibel sind:
+Die erste Prüfung auf dem Debian-Host ergab vier AUTO-READY-Projekte: `pocket-id`, `yattee`, `dockhand` und `portainer`. Verwaltungswerkzeuge wie Portainer und Dockhand würde ich **nicht** ohne besonderen Grund zur Updatefreigabe hinzufügen. Der Parameter `--projects` ist beim Übernehmen Pflicht: Er verhindert, dass ungeplant weitere Projekte freigegeben werden.
+
+Nach Prüfung der gewünschten `AUTO-READY`-Projekte:
 
 ```bash
 # NUR geprüfte, neue Projekte ergänzen, bestehende Einstellungen behalten:
 sudo python3 /usr/local/lib/fleet-agent/discover_compose_projects.py \
-  --apply --approve-new-projects
+  --apply --projects pocket-id,yattee --approve-new-projects
 
 # Agent-Konfiguration vor der Aktivierung validieren:
 sudo /usr/local/lib/fleet-agent/fleet_agent.py \
@@ -47,7 +49,7 @@ sudo systemctl restart fleet-agent
 sudo systemctl status fleet-agent --no-pager
 ```
 
-`--approve-new-projects` bestätigt, dass bei bereits aktivierter Aktion `compose_update` zusätzlich entdeckte Projekte künftig manuell aktualisiert werden können. Ohne diesen Parameter verweigert das Skript die Änderung. Wenn keine neuen `AUTO-READY`-Projekte vorhanden sind, bleibt die Konfiguration unverändert.
+`--approve-new-projects` bestätigt, dass bei bereits aktivierter Aktion `compose_update` zusätzlich entdeckte Projekte künftig manuell aktualisiert werden können. Ohne diesen Parameter verweigert das Skript die Änderung. Nur die über `--projects` ausdrücklich gewählten `AUTO-READY`-Projekte werden ergänzt. Bereits erfasste Projekte bleiben unverändert. Wenn keine neuen ausgewählten Projekte vorhanden sind, bleibt die Konfiguration unverändert.
 
 Bei Änderungen erstellt das Skript eine geheime Sicherung wie `/etc/fleet-agent/config.json.bak-20261115T...` (Dateirechte 0600) und schreibt `config.json` atomar. `allowed_actions` und `standalone_containers` bleiben unverändert. Der Agent muss danach neu gestartet werden; bei aktiven Wartungsjobs nicht neu starten.
 
