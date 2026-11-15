@@ -186,7 +186,8 @@ def evaluate(project: str, item: dict, mappings: list[tuple[Path, Path, str]]) -
     return output
 
 
-def apply_config(config_path: Path, inventory: dict, confirm_scope: bool) -> tuple[list[str], list[str]]:
+def apply_config(config_path: Path, inventory: dict, confirm_scope: bool,
+                 selected: set[str] | None = None) -> tuple[list[str], list[str]]:
     if not config_path.is_file():
         raise DiscoveryError(f"Fleet Guard config file does not exist: {config_path}")
     if config_path.is_symlink():
@@ -197,8 +198,17 @@ def apply_config(config_path: Path, inventory: dict, confirm_scope: bool) -> tup
     if "compose_update" in current.get("allowed_actions", []) and not confirm_scope:
         raise DiscoveryError("compose_update is enabled; use --approve-new-projects to acknowledge expanded update permissions")
     configured = current.setdefault("compose_projects", {})
+    if selected is not None:
+        missing = selected - set(inventory["projects"])
+        if missing:
+            raise DiscoveryError(f"Unknown Compose project(s): {', '.join(sorted(missing))}")
+        refused = {name for name in selected if not inventory["projects"][name]["eligible"]}
+        if refused:
+            raise DiscoveryError(f"Projects require review, cannot apply: {', '.join(sorted(refused))}")
     enrolled, existing = [], []
     for name, project in inventory["projects"].items():
+        if selected is not None and name not in selected:
+            continue
         if not project["eligible"]:
             continue
         if name in configured:
@@ -229,10 +239,16 @@ def apply_config(config_path: Path, inventory: dict, confirm_scope: bool) -> tup
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("/etc/fleet-agent/config.json"))
-    parser.add_argument("--apply", action="store_true", help="Add only verified, previously unconfigured projects")
+    parser.add_argument("--apply", action="store_true", help="Add selected verified projects (requires --projects)")
+    parser.add_argument("--projects", type=str, help="Comma-separated explicit project names to enroll, e.g. pocket-id,yattee")
     parser.add_argument("--approve-new-projects", action="store_true", help="Acknowledge update permission extension if compose_update already allowed")
     parser.add_argument("--json", action="store_true", help="Print machine-readable discovery report (never tokens)")
     args = parser.parse_args(argv)
+    if args.apply and not args.projects:
+        parser.error("--apply requires an explicit --projects selection to prevent enrolling management stacks")
+    if args.projects and any(not p.strip() for p in args.projects.split(",")):
+        parser.error("--projects must list non-empty project names, separated by commas")
+    selected = set(args.projects.split(",")) if args.projects else None
     try:
         containers = get_containers()
         inventory = inspect_inventory(containers, manager_mounts(containers))
@@ -249,7 +265,7 @@ def main(argv=None) -> int:
             if inventory["standalone"]:
                 print("Standalone (agent policy controls updates): " + ", ".join(inventory["standalone"]))
         if args.apply:
-            added, existing = apply_config(args.config, inventory, args.approve_new_projects)
+            added, existing = apply_config(args.config, inventory, args.approve_new_projects, selected)
             print(f"ADDED {len(added)} verified Compose project(s): {', '.join(added) or '-'}")
             print(f"UNCHANGED {len(existing)} previously registered project(s)")
             if added:
