@@ -98,5 +98,32 @@ class Tests(unittest.TestCase):
                 d.apply_config(path, {"projects": {}}, False)
 
 
+
+    def test_explicit_selection_limits_config(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "config.json"
+            path.write_text(json.dumps({"allowed_actions": [], "compose_projects": {}}))
+            info = {"eligible": True, "working_dir": "/x", "files": ["/x/compose.yml"]}
+            inventory = {"projects": {"pocket-id": dict(info), "portainer": dict(info)}}
+            added, _ = d.apply_config(path, inventory, False, {"pocket-id"})
+            self.assertEqual(added, ["pocket-id"])
+            self.assertEqual(list(json.loads(path.read_text())["compose_projects"]), ["pocket-id"])
+
+    def test_selection_rejects_unvalidated_projects(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "config.json"
+            path.write_text(json.dumps({"allowed_actions": [], "compose_projects": {}}))
+            inventory = {"projects": {"asterisk": {"eligible": False, "reason": "Portainer"}}}
+            with self.assertRaises(d.DiscoveryError):
+                d.apply_config(path, inventory, False, {"asterisk"})
+            self.assertEqual(json.loads(path.read_text())["compose_projects"], {})
+
+    def test_selection_rejects_missing_projects(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "config.json"
+            path.write_text(json.dumps({"allowed_actions": [], "compose_projects": {}}))
+            with self.assertRaises(d.DiscoveryError):
+                d.apply_config(path, {"projects": {}}, False, {"unknown"})
+
 if __name__ == "__main__":
     unittest.main()
