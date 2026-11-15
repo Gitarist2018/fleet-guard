@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Fleet-Guard-Linux-Agent hinzufügen",
+        "description": "HTTPS-Adresse und Zugriffstoken des Agents eingeben. TLS-Zertifikatsprüfung nur für vertrauenswürdige Testumgebungen deaktivieren.",
+        "data": {
+          "url": "Agent-URL",
+          "token": "Zugriffstoken",
+          "verify_ssl": "TLS-Zertifikat überprüfen"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Bitte http:// oder https:// eingeben",
+      "invalid_auth": "Falsches Zugriffstoken",
+      "cannot_connect": "Agent nicht erreichbar",
+      "invalid_response": "Ungültige Antwort des Agents"
+    },
+    "abort": {
+      "already_configured": "Dieser Host ist bereits eingerichtet"
+    }
+  }
+}
