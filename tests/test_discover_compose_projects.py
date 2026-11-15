@@ -37,6 +37,28 @@ class Tests(unittest.TestCase):
                 result = d.inspect_inventory([c], [])
             self.assertTrue(result["projects"]["demo"]["eligible"])
 
+    def test_implicit_latest_tag_matches_deployed_container(self):
+        self.assertEqual(d.normalized_image_reference("nickfedor/watchtower"),
+                         d.normalized_image_reference("nickfedor/watchtower:latest"))
+        self.assertEqual(d.normalized_image_reference("localhost:5000/app"),
+                         "localhost:5000/app:latest")
+        self.assertEqual(d.normalized_image_reference("localhost:5000/app:v2"),
+                         "localhost:5000/app:v2")
+        self.assertEqual(d.normalized_image_reference("app@sha256:abc"),
+                         "app@sha256:abc")
+
+    def test_watchtower_becomes_eligible_without_other_differences(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            file = root / "docker-compose.yml"
+            file.write_text("services:\\n  watchtower:\\n    image: nickfedor/watchtower\\n")
+            c = fake("watchtower", "watchtower", "watchtower", root, file,
+                     image="nickfedor/watchtower:latest")
+            model = {"services": {"watchtower": {"image": "nickfedor/watchtower"}}}
+            with patch.object(d, "run", return_value=json.dumps(model)):
+                result = d.inspect_inventory([c], [])
+            self.assertTrue(result["projects"]["watchtower"]["eligible"])
+
     def test_bad_mount_is_blocked(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
