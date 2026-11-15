@@ -82,3 +82,18 @@ Die vor dem Schreiben gesicherte `config.json.bak-...` kann bei Bedarf mit 0600-
 ```bash
 python3 -m unittest discover -s tests -v
 ```
+
+## Debian-Befund 2026-11-15: Portainer-Stapel und Watchtower
+
+Der Portainer-Container bindet `/Docker/portainer/data` als `/data` ein. Die in Docker-Labels gespeicherten Compose-Dateipfade werden damit zu:
+
+- asterisk: `/Docker/portainer/data/compose/11/docker-compose.yml` (**`stack.env` vorhanden**)
+- emby: `/Docker/portainer/data/compose/6/docker-compose.yml`
+- telerising (drei Services): `/Docker/portainer/data/compose/16/docker-compose.yml`
+- zoraxy: `/Docker/portainer/data/compose/2/docker-compose.yml`
+
+Alle vier Compose-Dateien existieren und ließen sich mit `docker compose config --quiet` syntaktisch prüfen. **Das beweist keine vollständige Übereinstimmung mit den laufenden Containern.** Insbesondere muss der Fleet-Guard-Agent vor dem Update von Asterisk dieselbe `stack.env` verwenden wie Portainer. Der bisher untersuchte Agent-Quellstand kennt keinen Parameter für `--env-file` bei `compose_update`; Asterisk vorerst nicht freigeben.
+
+Watchtower: Der beim Scan festgestellte Unterschied zwischen `nickfedor/watchtower` und `nickfedor/watchtower:latest` ist als impliziter `:latest`-Tag nun im Discovery-Werkzeug normalisiert. Ein erneuter, lesender Scan kann weitere Abweichungen sichtbar machen. Watchtower nicht ungeprüft aktualisieren, da er andere Container verwaltet.
+
+**Wichtig:** Die Portainer-Projekte bleiben durch das Discovery-Skript zunächst bewusst auf `REVIEW`, selbst wenn es ihre Dateien auf dem Host findet. Vor Aufnahme in die Konfiguration Images, Bind-Mounts, Variablen, Ports und Neustartverhalten mit der laufenden Konfiguration abgleichen; bei `stack.env` Agent-Aktualisierung nötig.
