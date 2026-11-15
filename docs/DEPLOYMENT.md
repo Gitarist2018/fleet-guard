@@ -1,29 +1,32 @@
-# Fleet Guard – current deployment status
+# Fleet Guard – Deploymentstand
 
-This repository currently contains **a Home Assistant dashboard and notification package only**. It is **not yet** a fully installable Fleet Guard agent / custom integration distribution. Never treat the contents as a tested release of the agent.
+## Home Assistant
 
-## Prerequisites
+Die vollständige, zuvor manuell installierte **Home-Assistant-Integration v0.3.0** befindet sich nun unter `custom_components/fleet_guard/` und hat ein `hacs.json`. Der Quelltext wurde aus dem bereitgestellten Archiv übernommen und für HACS nur um die erforderlichen `manifest.json`-Links erweitert.
 
-The HA integration must already expose per-container `update.*` entities, otherwise the template sensor cannot detect those missing update entities. Agent-reported image updates alone do not automatically make an `update.*` entity available.
-
-Install `homeassistant/packages/fleet_guard_updates.yaml` under `/config/packages/` if your `configuration.yaml` includes `homeassistant: packages: !include_dir_named packages`. Validate Home Assistant configuration before restart. The dashboard card needs `custom:auto-entities`.
+- [Sichere HACS-Migration](HACS_MIGRATION.md) – bestehende Geräte-/Host-Einträge **nicht** löschen.
+- [Sammelupdate-Skript](BATCH_UPDATES.md) – **separat** über `homeassistant/packages/fleet_guard_updates.yaml` installieren.
+- Die Integration wurde syntaktisch geprüft; ein tatsächlicher Home-Assistant-Laufzeittest steht aus.
+- HACS verwaltet **nur** die HA-Integration. Agenten sind weiterhin extern zu installieren und zu aktualisieren.
 
 ## Synology
 
-Seven configured Compose projects and image scanning were verified; Sonarr and Radarr each reported an update on 2026-11-14. Keep `allowed_actions: []` until Portainer Compose project directories, .env, and bind mounts are validated for the agent execution context. The container's `/host-volume1` path is not inherently a valid path for bind mounts on the Synology Docker daemon.
+Bei der Prüfung am 2026-11-14 wurden sieben Compose-Projekte und 28 Compose-Dienste erkannt. Sonarr und Radarr waren aktualisierbar. Ob sie weiterhin aktualisierbar sind, hängt von den seitdem ausgeführten Updates ab.
+
+**Wichtig:** In der Agent-Container-Konfiguration können Compose-Dateien über `/host-volume1/` lesbar sein. Docker-Bind-Mounts werden auf dem Host aufgelöst; relative Verzeichnisse und Portainer-`.env`-Dateien brauchen vor produktiven `compose_update`-Aktionen einen expliziten Test. Eine freigegebene Updateberechtigung ersetzt diesen Test nicht.
 
 ## Debian
 
-The existing systemd agent and its actual Compose project path configuration require inspection before enabling any update actions. Never apply `compose_update` to a stack until mounts and environment resolution are validated.
+Der installierte systemd-Agent muss vor einer Verteilung über GitHub Releases mit der tatsächlich auf dem Debian-Host laufenden Version abgeglichen werden. Compose-Projektverzeichnisse und Umgebungsdateien sind zu validieren.
 
-## Release and secrets policy
+## Proxmox
 
-Do not commit agent tokens, certificates, backups, credentials, `.env` files, or host-specific `config.json`. Releases and auto-updaters will be added **after** the live sources have been reviewed and tested. Updates should remain human-approved, with explicit per-container confirmation and status checks.
+Host-Updates und Neustarts bleiben explizit freigegebene Wartungsaktionen. Keine automatischen Major-Upgrades.
 
-## Next steps
+## GitHub-Distribution
 
-1. Review and import installed `custom_components/fleet_guard` source without secrets.
-2. Review installed Linux agent source, existing test coverage and API compatibility.
-3. Add install/update scripts with version pinning, SHA-256/signature verification, atomic installs and rollback.
-4. Validate Compose and standalone updates separately on Debian and Synology.
-5. Add HACS metadata and GHCR publishing only when integration/agent are releasable.
+Noch offen: versionierte Releases, signierte oder per Hash geprüfte Agent-Installer, GHCR-Synology-Image, Rollback-Tests und projektbezogene Job-Parallelität. Keine stillen Updates.
+
+## Zugangsdaten
+
+Keine API-Tokens, Zertifikat-Privatschlüssel, Backups, Agent-`config.json`, `.env` oder Host-Credentials ins Repository committen.
