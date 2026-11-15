@@ -34,3 +34,9 @@ Die `homeassistant/packages/`-Dateien sind **nicht Teil des HACS-Downloads**. Si
 ## Noch offen
 
 Die installierten Agent-Versionen für Debian, Synology und Proxmox liegen **noch nicht als überprüfte GitHub-Installationspakete** vor. Dazu fehlen die Agent-Quellstände und Tests für verlässliche Releases, Rollback und parallele Aktualisierung unterschiedlicher Docker-Stacks.
+
+## Docker-Compose-Projekte automatisch erkennen (Debian)
+
+Der [Discovery-Baustein](scripts/discover_compose_projects.py) erkennt vorhandene Compose-Projekte und Standalone-Container aus Docker-Metadaten. Er kann **eindeutig validierte** Compose-Projekte in die vorhandene Fleet-Guard-Agent-Konfiguration übernehmen, ohne Container auszuführen oder `allowed_actions` zu ändern. Portainer-/Dockhand-Quellen mit nicht eindeutig reproduzierbarer Umgebung werden nur zur Prüfung gemeldet.
+
+[Anleitung für Debian, Sicherheit und Rückweg](docs/DOCKER_DISCOVERY.md). Der Baustein ist noch **kein selbstaktualisierender Agent-Release**; auf Synology vorerst nicht zur automatischen Konfigurationsänderung verwenden.
