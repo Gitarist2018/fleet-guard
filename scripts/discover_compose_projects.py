@@ -126,6 +126,20 @@ def inspect_inventory(containers: list[dict], mappings: list[tuple[Path, Path, s
     return {"projects": result, "standalone": sorted(set(standalone))}
 
 
+def normalized_image_reference(reference: str) -> str:
+    """Docker defaults a tagless image reference to :latest.
+
+    Only normalize a missing tag; never rewrite digest-pinned references.
+    A registry port (localhost:5000/repo) is not a tag separator.
+    """
+    if not reference or "@" in reference:
+        return reference
+    slash = reference.rfind("/")
+    if ":" not in reference[slash + 1:]:
+        return reference + ":latest"
+    return reference
+
+
 def evaluate(project: str, item: dict, mappings: list[tuple[Path, Path, str]]) -> dict:
     services = sorted(item["services"])
     output = {"services": services, "eligible": False, "reason": "", "working_dir": None,
@@ -169,7 +183,8 @@ def evaluate(project: str, item: dict, mappings: list[tuple[Path, Path, str]]) -
             definition = definitions.get(service)
             if not isinstance(definition, dict):
                 raise DiscoveryError(f"Service {service} absent from resolved Compose model")
-            if str(definition.get("image") or "") != str((container.get("Config") or {}).get("Image") or ""):
+            if normalized_image_reference(str(definition.get("image") or "")) != normalized_image_reference(
+                str((container.get("Config") or {}).get("Image") or "")):
                 raise DiscoveryError(f"Service {service} image differs from deployed container")
             expected_bind = {(str(v.get("target")), str(v.get("source")))
                              for v in definition.get("volumes", []) if isinstance(v, dict) and v.get("type") == "bind"}
