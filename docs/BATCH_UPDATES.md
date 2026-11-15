@@ -1,25 +1,42 @@
-# Fleet Guard – Sammelupdates in Home Assistant
+# Fleet Guard – Sammelupdates (Fehlerbehebung v0.3.1)
 
-Das Home-Assistant-Paket `homeassistant/packages/fleet_guard_updates.yaml` enthält das Skript **Fleet Guard: ausgewählte Docker-Container aktualisieren** (`script.fleet_guard_container_batch_update`).
+## Ursache der verlorenen Mehrfach-Updates
 
-## Einrichtung
+Der alte Home-Assistant-Sammelaufruf verwendete einmalig `update.install` mit **allen** ausgewählten Entitäten. Home Assistant kann dabei mehrere `async_install`-Methoden gleichzeitig aufrufen. Der aktuelle Fleet-Guard-Agent akzeptiert aber nur **einen wartenden oder laufenden mutierenden Job pro Host**. Andere parallele Anfragen wurden abgewiesen, sodass oft nur ein Container aktualisiert wurde.
 
-1. Öffne die Paketdatei in GitHub und ersetze den Inhalt der bereits eingerichteten Datei `/config/packages/fleet_guard_updates.yaml` durch die neue Version.
-2. Stelle sicher, dass in `/config/configuration.yaml` die Pakete eingebunden sind: `homeassistant: packages: !include_dir_named packages` (mit korrekter YAML-Einrückung).
-3. Home Assistant: Entwicklerwerkzeuge > YAML > Konfiguration prüfen. Danach Home Assistant neu starten.
-4. Öffne Einstellungen > Automatisierungen & Szenen > Skripte > **Fleet Guard: ausgewählte Docker-Container aktualisieren**.
-5. Drei-Punkte-Menü > **Skript ausführen**. Wähle mehrere Docker-Update-Entitäten (zuerst möglichst nur zwei unkritische), aktiviere das Kontrollfeld **Updates jetzt installieren** und starte das Skript. Das ist die einzige ausdrückliche Bestätigung für alle ausgewählten Updates.
-6. Unter Entwicklerwerkzeuge > Zustände und Fleet-Guard-Jobstatus prüfen, ob die einzelnen Updates durchgeführt wurden und ob die Anwendungen erreichbar sind.
+## Zwei ergänzende Korrekturen
 
-## Schutzmechanismen
+1. **Home-Assistant-Integration v0.3.1**: `FleetCoordinator.perform` verwendet ein `asyncio.Lock` **pro Host** für mutierende Wartungsoperationen und hält die Sperre bis zum Ende des Jobs. Mehrfachaufrufe aus der normalen Home-Assistant-Updateoberfläche werden auf demselben Host nacheinander abgearbeitet. Andere Hosts haben unabhängige Sperren, können also parallel aktualisieren.
+2. **Optionales Sammel-Skript**: `homeassistant/packages/fleet_guard_updates.yaml` ruft für jede ausgewählte Entität **separat und nacheinander** `update.install` auf (`repeat.for_each`). Nur eine Auswahl und Bestätigung sind notwendig. `continue_on_error: true` verhindert, dass ein einzelner Fehler den Versuch bei den anderen ausgewählten Containern unterdrückt. **Es bestätigt nicht den Erfolg!** In den Skript-Traces und Fleet-Guard-Jobs sind etwaige Fehler zu prüfen.
 
-- Kein Update läuft automatisch; ausschließlich ein manueller Skriptaufruf.
-- Zugelassen werden nur Update-Entitäten, die von der Integration `fleet_guard` stammen, mit `update.` beginnen, auf `_image` enden und aktuell den Zustand `on` haben.
-- Bei fehlender Bestätigung, leerer Auswahl, Doppelung oder ungültigen Entitäten wird der gesamte Auftrag vor Ausführung abgebrochen.
-- Die Berechtigung des Agents (`allowed_actions`), sein Compose-Projekt-Allowlisting und alle übrigen Host-Sicherheitsregeln gelten unverändert. Ein Home-Assistant-Skript umgeht sie nicht.
-- Ein Aufruf von `update.install` mit mehreren Entitäten verteilt Updateanfragen; er **garantiert keine gleichzeitige Ausführung** auf einem Host. Fleet-Guard-Agenten mit nur einem Job-Worker verarbeiten die Aktionen nacheinander. Für echte hostinterne Parallelität braucht der Agent eine getrennte, projektbezogene Job- und Lock-Verwaltung.
-- Datenbank-Container, abhängige Services und produktive Anwendungen nach gesondertem Backup und in geplanter Reihenfolge aktualisieren. Nach einem erfolgreichen Job noch Gesundheit der Anwendung und die nächste Updateprüfung abwarten.
+Es gibt **keine echte Parallelität innerhalb eines einzelnen Hosts**. Sie würde getrennte Workers, Compose-Projekt-Sperren, Ressourcenlimits und Healthcheck-/Rollback-Strategien im Linux-Agent voraussetzen.
 
-## Nächster Schritt
+## Installation
 
-Für echtes paralleles Aktualisieren unterschiedlicher Compose-Projekte und eine vollwertige Mehrfachauswahl direkt in einer Dashboard-Karte die tatsächlich installierten Agent-/Integrationsquellen importieren, Locking pro Host/Compose-Projekt und maximale Workerzahl ergänzen, anschließende Healthchecks testen und versioniert veröffentlichen. Keine ungetestete parallele Compose-Ausführung in derselben Projektgruppe.
+### HACS-Version aktualisieren
+
+1. Home Assistant vollständig sichern.
+2. HACS → Fleet Guard → aktualisierte `main`-Version **erneut herunterladen** (Version in `manifest.json`: `0.3.1`). Falls HACS keine Updatebenachrichtigung anzeigt, manuell die neueste Version herunterladen.
+3. Home Assistant neu starten.
+4. Unter Einstellungen → Geräte & Dienste → Fleet Guard vorhandene Hosts und Update-Entitäten prüfen. **Keine** Host-Einträge löschen.
+
+### Optional: Sammel-Skript aktualisieren
+
+1. Inhalt von [`homeassistant/packages/fleet_guard_updates.yaml`](../homeassistant/packages/fleet_guard_updates.yaml) in `/config/packages/fleet_guard_updates.yaml` ersetzen (vorhandene Datei vorher sichern).
+2. Unter Entwicklerwerkzeuge → YAML die Konfiguration prüfen und HA danach neu starten.
+3. Einstellungen → Automatisierungen & Szenen → Skripte → **Fleet Guard: ausgewählte Docker-Container aktualisieren** öffnen.
+4. Zwei **unkritische** Container mit gültigen Backups auswählen, **Updates jetzt installieren** aktivieren und den Sammelauftrag einmal starten.
+5. Nach Ende Skript-Traces unter dem Skript, Agent-Jobstatus, Docker-Zustand und App-Funktion prüfen. Die Update-Entitäten können wegen des Registry-Scan-Caches bis zum nächsten Scan weiterhin `on` anzeigen.
+
+## Schutzmaßnahmen
+
+- Keine automatischen oder geplanten Updates durch diese Änderung.
+- Agent-seitige `allowed_actions` und `compose_projects` bleiben unverändert.
+- Fehler einzelner Container können in der Sammelaktion übersprungen werden; **nicht** aus einem beendeten Skript auf erfolgreichen Abschluss aller Updates schließen.
+- Bei Portainer-Compose-Projekten vor produktiven Updates Bind-Mounts, ENV-Dateien und Projektverzeichnisse validieren. Die HA-Sperre löst keine Compose-Pfadprobleme.
+- Das Sammel-Skript startet keine zweite Ausführung, solange eine erste läuft (`mode: single`).
+- Vor Datenbank- und Mehrcontainer-Upgrades Sicherungen anlegen und Abhängigkeiten berücksichtigen.
+
+## Rückweg
+
+Bei Problemen die vorherige Integration aus der Home-Assistant-Sicherung bzw. dem archivierten `fleet_guard_ha.tar.gz` wiederherstellen und Home Assistant neu starten. Falls nur das Sammel-Skript Probleme verursacht, die gesicherte YAML-Datei zurückkopieren und Skripte neu laden.
