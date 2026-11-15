@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add Fleet Guard Linux agent",
+        "description": "Enter the HTTPS URL and the secret token configured on the host. Only disable certificate verification in a trusted test environment.",
+        "data": {
+          "url": "Agent URL",
+          "token": "Agent access token",
+          "verify_ssl": "Verify TLS certificate"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Enter an http:// or https:// URL",
+      "invalid_auth": "Invalid agent token",
+      "cannot_connect": "Cannot connect to agent",
+      "invalid_response": "Invalid agent response"
+    },
+    "abort": {
+      "already_configured": "This host is already configured"
+    }
+  }
+}
