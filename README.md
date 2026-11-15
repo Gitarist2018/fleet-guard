@@ -1,24 +1,36 @@
 # Fleet Guard
 
-Fleet Guard is an experimental Home Assistant and Linux/Docker fleet-management project.
+Fleet Guard ist eine Home-Assistant-Integration zur Überwachung von Linux-Hosts, Docker-Containern und Proxmox. Die Integration kommuniziert über HTTPS mit einem Fleet-Guard-Agent auf jedem Host.
 
-> **Current repository state:** This repository contains only an initial Home Assistant notification/dashboard package and deployment notes. **It is not yet a complete, tested, or installable Fleet Guard agent / custom integration release.** No automatic host or container update is enabled by committing these files.
+## Home-Assistant-Integration: v0.3.0
 
-## Included
+**Die im November 2026 hochgeladene, funktionsfähige HA-Integration v0.3.0 wurde vollständig und unverändert aus dem lokalen Archiv importiert**, ausgenommen zwei zusätzliche Dokumentationsfelder im `manifest.json`. Vor dem Import wurden Python-Syntax, JSON-Struktur und der Quelltextabgleich geprüft. Das ist noch keine Laufzeitprüfung unter Home Assistant.
 
-- [Home Assistant notification package](homeassistant/packages/fleet_guard_updates.yaml) — counts existing `fleet_guard` `update.*` entities with state `on`, raises a persistent notification, and dismisses it when the count reaches zero. Unknown/unavailable states should be checked separately and **must not** be treated as verified current.
-- [Simon42 dashboard card](homeassistant/cards/fleet_guard_simon42_auto_entities.yaml) — requires `custom:auto-entities` and existing per-container `update.*` entities from the Fleet Guard integration.
-- [Deployment and security notes](docs/DEPLOYMENT.md).
+HACS-Struktur:
+- [Integration unter `custom_components/fleet_guard/`](custom_components/fleet_guard/)
+- [HACS-Metadaten](hacs.json)
+- [Anleitung zum Wechsel von lokaler Installation auf HACS](docs/HACS_MIGRATION.md)
 
-## Safety
+**Keine bestehende Fleet-Guard-Integration unter `Einstellungen → Geräte & Dienste` löschen.** Vor der HACS-Installation eine Home-Assistant-Sicherung erstellen; die GitHub-Dateien liegen unter demselben Integrations-Domainnamen und behalten ihre Unique IDs bei.
 
-- No Compose or standalone updates are run by the files currently in this repository.
-- On Synology, **keep `allowed_actions: []`** until Portainer-specific Compose paths, environment files, and volume mounts have been verified in the execution context.
-- Review the Debian agent's installed Compose project configuration and container mount paths before enabling updates.
-- Tokens, TLS private keys, `.env` files, backups and host-specific `config.json` files must never be committed.
+HACS kann die HA-Integration aus `main` installieren. Derzeit gibt es noch keinen GitHub Release; Branch-Updates sind möglich, für produktive Releases sollen später versionierte GitHub Releases folgen.
 
-## Roadmap
+## Weitere Home-Assistant-Bausteine
 
-Import and review the exact deployed sources for the Home Assistant integration and Debian/Synology agents; add tests, explicit per-container update confirmation, job status and health checks, and reliable notification clearing; then implement signed/version-pinned agent installers and rollback, GitHub Releases, HACS installation and GHCR images.
+- [Updateübersicht und Benachrichtigungen](homeassistant/packages/fleet_guard_updates.yaml) einschließlich **manuell bestätigtem Sammelupdate-Skript**
+- [Simon42-Dashboard-Karte](homeassistant/cards/fleet_guard_simon42_auto_entities.yaml)
+- [Anleitung Sammelupdates](docs/BATCH_UPDATES.md)
 
-See [deployment notes](docs/DEPLOYMENT.md) for prerequisites and the current limitations.
+Die `homeassistant/packages/`-Dateien sind **nicht Teil des HACS-Downloads**. Sie müssen momentan separat in die HA-Paketkonfiguration übernommen werden.
+
+## Sicherheitsstatus
+
+- HACS aktualisiert nur die HA-Integration, nicht die Linux-/Synology-Agenten.
+- Fleet Guard führt Docker-Updates nur durch, sofern der jeweilige Agent seine Aktionen freigegeben hat; **es gibt keine automatischen Container-Updates durch einen HACS-Download**.
+- Mehrere `update.install`-Aufrufe garantieren noch keine Parallelität. Die Agent-Warteschlange verarbeitet Jobs weiterhin kontrolliert nacheinander.
+- **Synology:** Portainer-Compose-Pfade und Host-Mounts sind vor der Nutzung von `compose_update` zu validieren; siehe [Deployment-Hinweise](docs/DEPLOYMENT.md).
+- Keine Tokens, TLS-Privatschlüssel, `.env` oder lokale Host-Konfiguration in GitHub committen.
+
+## Noch offen
+
+Die installierten Agent-Versionen für Debian, Synology und Proxmox liegen **noch nicht als überprüfte GitHub-Installationspakete** vor. Dazu fehlen die Agent-Quellstände und Tests für verlässliche Releases, Rollback und parallele Aktualisierung unterschiedlicher Docker-Stacks.
