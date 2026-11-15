@@ -12,7 +12,7 @@ template:
         unique_id: fleet_guard_container_updates_offen
         icon: mdi:package-up
         state: >-
-          {% set ids = integration_entities('fleet_guard') | select('match', '^update\.') | list %}
+          {% set ids = integration_entities('fleet_guard') | select('match', '^update\..*_image | list %}
           {{ expand(ids) | selectattr('state', 'eq', 'on') | list | count }}
         attributes:
           pending_names: >-
@@ -20,6 +20,293 @@ template:
             {{ expand(ids) | selectattr('state', 'eq', 'on') | map(attribute='name') | list | join(' | ') }}
           unknown_count: >-
             {% set ids = integration_entities('fleet_guard') | select('match', '^update\.') | list %}
+            {{ expand(ids) | selectattr('state', 'in', ['unknown', 'unavailable']) | list | count }}
+
+automation:
+  - id: fleet_guard_all_hosts_updates_notification
+    alias: "Fleet Guard: Docker-Updates in Benachrichtigungen"
+    triggers:
+      - trigger: state
+        entity_id: sensor.fleet_guard_container_updates_offen
+      - trigger: homeassistant
+        event: start
+    actions:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ states('sensor.fleet_guard_container_updates_offen') | int(0) > 0 or state_attr('sensor.fleet_guard_container_updates_offen', 'unknown_count') | int(0) > 0 }}"
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  notification_id: fleet_guard_container_updates
+                  title: "Fleet Guard: Docker-Updates / ungeklärte Images"
+                  message: >-
+                    {{ states('sensor.fleet_guard_container_updates_offen') }} Container-Updates sind verfügbar.
+
+                    {{ state_attr('sensor.fleet_guard_container_updates_offen', 'pending_names') or 'Details in Fleet Guard prüfen.' }}
+
+                    Ungeprüfte/unverfügbare Image-Entitäten: {{ state_attr('sensor.fleet_guard_container_updates_offen', 'unknown_count') | int(0) }}.
+
+                    Wähle im Fleet-Guard-Sammelskript die gewünschten Updates und bestätige den Auftrag einmal.
+        default:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: fleet_guard_container_updates
+    mode: restart
+
+
+# Manual batch installation. No automatic scheduling.
+# Only update.*_image entities owned by Fleet Guard and currently 'on' are accepted.
+# Sequential actions avoid agent rejections while retaining one confirmation for the batch.
+script:
+  fleet_guard_container_batch_update:
+    alias: "Fleet Guard: ausgewählte Docker-Container aktualisieren"
+    description: >-
+      Mehrere Fleet-Guard-Docker-Images auswählen und mit einer Bestätigung
+      aktualisieren. Die Aktualisierung ist nicht automatisch.
+    icon: mdi:package-up
+    mode: single
+    fields:
+      docker_images:
+        name: "Docker-Container"
+        description: "Wähle nur die Container, die du jetzt aktualisieren möchtest."
+        required: true
+        selector:
+          entity:
+            multiple: true
+            filter:
+              - integration: fleet_guard
+                domain: update
+      bestaetigen:
+        name: "Updates jetzt installieren"
+        description: >-
+          Einmalig bestätigen. Die ausgewählten Container können beim
+          Image-Wechsel neu erstellt werden; kurze Ausfälle sind möglich.
+        required: true
+        default: false
+        selector:
+          boolean: {}
+    sequence:
+      - variables:
+          requested: "{{ docker_images | default([], true) }}"
+          allowed: >-
+            {{ integration_entities('fleet_guard')
+               | select('match', '^update\..*_image$')
+               | select('is_state', 'on')
+               | list }}
+      - if:
+          - condition: template
+            value_template: >-
+              {{ bestaetigen | default(false) | bool
+                 and requested | length > 0
+                 and requested | unique | list | length == requested | length
+                 and requested | select('in', allowed) | list | length == requested | length }}
+        then:
+          # The agent refuses overlapping mutating jobs. Process selections
+          # individually, but without requiring another user confirmation.
+          # A failed container must not suppress attempts for the rest.
+          - repeat:
+              for_each: "{{ requested }}"
+              sequence:
+                - alias: "Docker-Image einzeln aktualisieren"
+                  action: update.install
+                  target:
+                    entity_id: "{{ repeat.item }}"
+                  continue_on_error: true
+        else:
+          - stop: >-
+              Keine gültige bestätigte Auswahl: Nur Fleet-Guard-Docker-Updates
+              im Zustand 'on' sind erlaubt. Bitte Auswahl prüfen.
+            error: true
+) | list %}
+          {{ expand(ids) | selectattr('state', 'eq', 'on') | list | count }}
+        attributes:
+          pending_names: >-
+            {% set ids = integration_entities('fleet_guard') | select('match', '^update\..*_image | list %}
+            {{ expand(ids) | selectattr('state', 'eq', 'on') | map(attribute='name') | list | join(' | ') }}
+          unknown_count: >-
+            {% set ids = integration_entities('fleet_guard') | select('match', '^update\.') | list %}
+            {{ expand(ids) | selectattr('state', 'in', ['unknown', 'unavailable']) | list | count }}
+
+automation:
+  - id: fleet_guard_all_hosts_updates_notification
+    alias: "Fleet Guard: Docker-Updates in Benachrichtigungen"
+    triggers:
+      - trigger: state
+        entity_id: sensor.fleet_guard_container_updates_offen
+      - trigger: homeassistant
+        event: start
+    actions:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ states('sensor.fleet_guard_container_updates_offen') | int(0) > 0 or state_attr('sensor.fleet_guard_container_updates_offen', 'unknown_count') | int(0) > 0 }}"
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  notification_id: fleet_guard_container_updates
+                  title: "Fleet Guard: Docker-Updates / ungeklärte Images"
+                  message: >-
+                    {{ states('sensor.fleet_guard_container_updates_offen') }} Container-Updates sind verfügbar.
+
+                    {{ state_attr('sensor.fleet_guard_container_updates_offen', 'pending_names') or 'Details in Fleet Guard prüfen.' }}\n\n                    Ungeprüfte/unverfügbare Image-Entitäten: {{ state_attr('sensor.fleet_guard_container_updates_offen', 'unknown_count') | int(0) }}.
+
+                    Öffne die jeweiligen Update-Entitäten und bestätige die Installation einzeln.
+        default:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: fleet_guard_container_updates
+    mode: restart
+
+
+# Manual batch installation. No automatic scheduling.
+# Only update.*_image entities owned by Fleet Guard and currently 'on' are accepted.
+# Agents may serialize jobs even if HA dispatches multiple entity targets.
+script:
+  fleet_guard_container_batch_update:
+    alias: "Fleet Guard: ausgewählte Docker-Container aktualisieren"
+    description: >-
+      Mehrere Fleet-Guard-Docker-Images auswählen und mit einer Bestätigung
+      aktualisieren. Die Aktualisierung ist nicht automatisch.
+    icon: mdi:package-up
+    mode: single
+    fields:
+      docker_images:
+        name: "Docker-Container"
+        description: "Wähle nur die Container, die du jetzt aktualisieren möchtest."
+        required: true
+        selector:
+          entity:
+            multiple: true
+            filter:
+              - integration: fleet_guard
+                domain: update
+      bestaetigen:
+        name: "Updates jetzt installieren"
+        description: >-
+          Einmalig bestätigen. Die ausgewählten Container können beim
+          Image-Wechsel neu erstellt werden; kurze Ausfälle sind möglich.
+        required: true
+        default: false
+        selector:
+          boolean: {}
+    sequence:
+      - variables:
+          requested: "{{ docker_images | default([], true) }}"
+          allowed: >-
+            {{ integration_entities('fleet_guard')
+               | select('match', '^update\..*_image$')
+               | select('is_state', 'on')
+               | list }}
+      - if:
+          - condition: template
+            value_template: >-
+              {{ bestaetigen | default(false) | bool
+                 and requested | length > 0
+                 and requested | unique | list | length == requested | length
+                 and requested | select('in', allowed) | list | length == requested | length }}
+        then:
+          - action: update.install
+            target:
+              entity_id: "{{ requested }}"
+        else:
+          - stop: >-
+              Keine gültige bestätigte Auswahl: Nur Fleet-Guard-Docker-Updates
+              im Zustand 'on' sind erlaubt. Bitte Auswahl prüfen.
+            error: true
+) | list %}
+            {{ expand(ids) | selectattr('state', 'eq', 'on') | map(attribute='name') | list | join(' | ') }}
+          unknown_count: >-
+            {% set ids = integration_entities('fleet_guard') | select('match', '^update\..*_image | list %}
+            {{ expand(ids) | selectattr('state', 'in', ['unknown', 'unavailable']) | list | count }}
+
+automation:
+  - id: fleet_guard_all_hosts_updates_notification
+    alias: "Fleet Guard: Docker-Updates in Benachrichtigungen"
+    triggers:
+      - trigger: state
+        entity_id: sensor.fleet_guard_container_updates_offen
+      - trigger: homeassistant
+        event: start
+    actions:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ states('sensor.fleet_guard_container_updates_offen') | int(0) > 0 or state_attr('sensor.fleet_guard_container_updates_offen', 'unknown_count') | int(0) > 0 }}"
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  notification_id: fleet_guard_container_updates
+                  title: "Fleet Guard: Docker-Updates / ungeklärte Images"
+                  message: >-
+                    {{ states('sensor.fleet_guard_container_updates_offen') }} Container-Updates sind verfügbar.
+
+                    {{ state_attr('sensor.fleet_guard_container_updates_offen', 'pending_names') or 'Details in Fleet Guard prüfen.' }}\n\n                    Ungeprüfte/unverfügbare Image-Entitäten: {{ state_attr('sensor.fleet_guard_container_updates_offen', 'unknown_count') | int(0) }}.
+
+                    Öffne die jeweiligen Update-Entitäten und bestätige die Installation einzeln.
+        default:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: fleet_guard_container_updates
+    mode: restart
+
+
+# Manual batch installation. No automatic scheduling.
+# Only update.*_image entities owned by Fleet Guard and currently 'on' are accepted.
+# Agents may serialize jobs even if HA dispatches multiple entity targets.
+script:
+  fleet_guard_container_batch_update:
+    alias: "Fleet Guard: ausgewählte Docker-Container aktualisieren"
+    description: >-
+      Mehrere Fleet-Guard-Docker-Images auswählen und mit einer Bestätigung
+      aktualisieren. Die Aktualisierung ist nicht automatisch.
+    icon: mdi:package-up
+    mode: single
+    fields:
+      docker_images:
+        name: "Docker-Container"
+        description: "Wähle nur die Container, die du jetzt aktualisieren möchtest."
+        required: true
+        selector:
+          entity:
+            multiple: true
+            filter:
+              - integration: fleet_guard
+                domain: update
+      bestaetigen:
+        name: "Updates jetzt installieren"
+        description: >-
+          Einmalig bestätigen. Die ausgewählten Container können beim
+          Image-Wechsel neu erstellt werden; kurze Ausfälle sind möglich.
+        required: true
+        default: false
+        selector:
+          boolean: {}
+    sequence:
+      - variables:
+          requested: "{{ docker_images | default([], true) }}"
+          allowed: >-
+            {{ integration_entities('fleet_guard')
+               | select('match', '^update\..*_image$')
+               | select('is_state', 'on')
+               | list }}
+      - if:
+          - condition: template
+            value_template: >-
+              {{ bestaetigen | default(false) | bool
+                 and requested | length > 0
+                 and requested | unique | list | length == requested | length
+                 and requested | select('in', allowed) | list | length == requested | length }}
+        then:
+          - action: update.install
+            target:
+              entity_id: "{{ requested }}"
+        else:
+          - stop: >-
+              Keine gültige bestätigte Auswahl: Nur Fleet-Guard-Docker-Updates
+              im Zustand 'on' sind erlaubt. Bitte Auswahl prüfen.
+            error: true
+) | list %}
             {{ expand(ids) | selectattr('state', 'in', ['unknown', 'unavailable']) | list | count }}
 
 automation:
